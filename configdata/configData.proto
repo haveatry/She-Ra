@@ -2,7 +2,7 @@ syntax = "proto3";
 package configdata;
 
 message Job {
-	int32 Id = 1;
+	string Id = 1;
 	string ExecTime = 2;
 	int32 MaxExecutionRecords = 3;
 	int32 MaxKeepDays = 4;
