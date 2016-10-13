@@ -18,3 +18,13 @@ type JobManager struct {
 type Resource struct {
     JobMng	*JobManager
 }
+
+func (d *Resource) createJob(request *restful.Request, response *restful.Response) {
+
+}
+func (d *Resource) findJob(request *restful.Request, response *restful.Response) {
+
+}
+func (d *Resource) updateJob(request *restful.Request, response *restful.Response) {
+
+}
