@@ -1,29 +1,24 @@
 package jobs
 
 import (
-	"encoding/json"
-	"errors"
 	"github.com/emicklei/go-restful"
-	"github.com/golang/protobuf/proto"
 	. "github.com/haveatry/She-Ra/api/response"
 	. "github.com/haveatry/She-Ra/configdata"
-	"log"
-	"net/http"
-	"net/url"
-	"strconv"
-	"strings"
 )
 
 func WebService(jobMng *JobManager) *restful.WebService {
-
+	dc := jobMng
+	return dc.WebService()
 }
 
+
+
 func Register(jobMng *JobManager, container *restful.Container, cors bool) {
-	dc := Resource{jobMng}
+	dc := jobMng
 	dc.Register(container, cors)
 }
 
-func (d Resource) Register(container *restful.Container, cors bool) {
+func (d JobManager) Register(container *restful.Container, cors bool) {
 	ws := d.WebService()
 
 	// Cross Origin Resource Sharing filter
@@ -36,11 +31,11 @@ func (d Resource) Register(container *restful.Container, cors bool) {
 	container.Add(ws)
 }
 
-func (d Resource) WebService() *restful.WebService {
+func (d JobManager) WebService() *restful.WebService {
 	ws := new(restful.WebService)
 	ws.Path("/She-Ra")
-	ws.Consumes("*/*")
-	ws.Produces(restful.MIME_JSON)
+	ws.Consumes(restful.MIME_XML, restful.MIME_JSON).
+	Produces(restful.MIME_JSON, restful.MIME_XML)
 
 	ws.Route(ws.GET("/{job-id}").To(d.findJob).
 		// docs
@@ -53,14 +48,14 @@ func (d Resource) WebService() *restful.WebService {
 		// docs
 		Doc("create a job").
 		Operation("createJob").
-		Reads(Resource{})) // from the request
+		Reads(Job{})) // from the request
 
 	ws.Route(ws.PUT("/{job-id}").To(d.updateJob).
 		// docs
 		Doc("update a job").
 		Operation("updateJob").
 		Param(ws.PathParameter("job-id", "identifier of the job").DataType("string")).
-		Reads(Resource{})) // from the request
+		Reads(Job{})) // from the request
 
 	return ws
 }

@@ -4,12 +4,11 @@ import (
 	"flag"
 	"log"
 	"net/http"
-	"strconv"
-
+	"path/filepath"
 	"github.com/emicklei/go-restful"
 	"github.com/emicklei/go-restful/swagger"
-	"github.com/go-sql-driver/mysql"
 	"github.com/haveatry/api/jobs"
+	"github.com/haveatry/She-Ra/configdata"
 	"github.com/magiconair/properties"
 )
 
@@ -56,8 +55,7 @@ var (
 	propertiesFile = flag.String("config", "she-ra.properties", "the configuration file")
 
 	SwaggerPath string
-
-//    SheRaIcon    string
+	SheRaIcon    string
 )
 
 func main() {
@@ -69,14 +67,14 @@ func main() {
 	if props, err = properties.LoadFile(*propertiesFile, properties.UTF8); err != nil {
 		log.Fatalf("[She-Ra][error] Unable to read properties:%v\n", err)
 	}
-
+	
 	// Swagger configuration
 	SwaggerPath = props.GetString("swagger.path", "")
-	//SheRaIcon = filepath.Join(SwaggerPath, "images/shera.ico")
+	SheRaIcon = filepath.Join(SwaggerPath, "images/jion.ico")
 
 	// New Job Manager
-	jobMng := &JobManager{
-		jobMap: make(map[string]*configdata.Job),
+	jobMng := &jobs.JobManager{
+		JobMap: make(map[string]*configdata.Job),
 	}
 
 	// accept and respond in JSON unless told otherwise
@@ -98,7 +96,15 @@ func main() {
 	basePath := "http://" + addr
 
 	// Register Swagger UI
+	swagger.InstallSwaggerService(swagger.Config{
+		WebServices:     restful.RegisteredWebServices(),
+		WebServicesUrl:  basePath,
+		ApiPath:         "/apidocs.json",
+		SwaggerPath:     SwaggerPath,
+		SwaggerFilePath: props.GetString("swagger.file.path", ""),
+	})
 
+	log.Print("basePath: ", basePath, "SwaggerPath: ", SwaggerPath, "SheRaIcon: ", SheRaIcon)
 	// If swagger is not on `/` redirect to it
 	if SwaggerPath != "/" {
 		http.HandleFunc("/", index)
@@ -109,6 +115,7 @@ func main() {
 
 	info("ready to serve on %s", basePath)
 	log.Fatal(http.ListenAndServe(addr, nil))
+
 }
 
 // If swagger is not on `/` redirect to it
@@ -124,3 +131,4 @@ func icon(w http.ResponseWriter, r *http.Request) {
 func info(template string, values ...interface{}) {
 	log.Printf("[She-Ra][info] "+template+"\n", values...)
 }
+

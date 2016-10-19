@@ -3,10 +3,11 @@ package configdata;
 
 message Job {
 	string Id = 1;
-	string ExecTime = 2;
-	int32 MaxExecutionRecords = 3;
-	int32 MaxKeepDays = 4;
-	CodeManager codeManager = 5;
+	string name = 2;
+	string ExecTime = 3;
+	int32 MaxExecutionRecords = 4;
+	int32 MaxKeepDays = 5;
+	CodeManager codeManager = 6;
 }
 
 message CodeManager {
@@ -15,9 +16,7 @@ message CodeManager {
 		git = 1;
 	}
 	Kind Select = 1;
-	oneof RepoKind {
-		Git _git = 2;
-	}
+	Git struGit = 2;
 }
 
 message Git {
