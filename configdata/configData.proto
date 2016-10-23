@@ -2,25 +2,40 @@ syntax = "proto3";
 package configdata;
 
 message Job {
-	string Id = 1;
-	string name = 2;
-	string ExecTime = 3;
-	int32 MaxExecutionRecords = 4;
-	int32 MaxKeepDays = 5;
-	CodeManager codeManager = 6;
+	string	id = 1;
+	string 	nextExecTime = 2;
+	string 	jdkVersion = 3;
+	string 	buildImgCmd = 4;
+	string 	pushImgCmd = 5;
+	int32 	currentNumber = 6;
+	int32 	maxExecutionRecords = 7;
+	int32 	maxKeepDays = 8;
+	CodeManager codeManager = 9;
+	BuildManager buildManager = 10;
 }
 
 message CodeManager {
 	enum Kind {
-		none = 0;
-		git = 1;
+		NONE = 0;
+		GIT = 1;
 	}
-	Kind Select = 1;
-	Git struGit = 2;
+	Kind select = 1;
+	Git gitConfig = 2;
+}
+
+message BuildManager {
+	enum Kind {
+		NONE = 0;	
+		ANT = 1;
+		MVN = 2;
+	}
+	Kind select = 1;
+	Ant antConfig = 2;
+	Maven mvnConfig = 3;
 }
 
 message Git {
-	string Branch = 1;
+	string branch = 1;
 	Repo repo = 2;
 }
 
@@ -33,4 +48,43 @@ message Repo {
 message GitAdvanced {
 	string name = 1;
 	string refspec = 2; 
+}
+
+message Ant {
+	string version = 1;
+	string targets = 2;
+	string buildFile = 3;
+	string properties = 4;
+	string javaopts = 5;
+}
+
+message Maven {
+	string version = 1;
+	string goals = 2;
+	string pom = 3;
+	string properties = 4;
+	string jvmopts	= 5;
+	string settingFile = 6;
+	string globalSettingFile = 7;
+}
+
+message Execution {
+	string job = 1;
+	int32  number = 2;
+	string logFile = 3;
+	enum State {
+		INIT = 0;
+		CODE_PULLING = 1;
+		CODE_BUILDING = 2;
+		IMAGE_BUILDING = 3;
+		IMAGE_PUSHING = 4;
+	}
+	State progress = 4;
+	enum Status {
+		SUCCESS = 0;
+		FAILURE = 1;
+		CANCELLED = 2;
+		IGNORED = 3;
+	}
+	Status endStatus = 5;
 }
