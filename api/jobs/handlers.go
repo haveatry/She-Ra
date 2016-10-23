@@ -203,7 +203,7 @@ func (d *JobManager) execJob(request *restful.Request, response *restful.Respons
 		//go d.execJobCmd(jobId)
 		info("Get the write lock successfully")
 		d.accessLock.Unlock()
-		go d.setChan(jobId, 100)
+		go d.setChan(jobId, EXEC_GOROUTINE)
 	} else {
 		response.AddHeader("Content-Type", "text/plain")
 		response.WriteErrorString(http.StatusInternalServerError, "no such job found")
@@ -243,6 +243,38 @@ func (cmd *JobCommand) Exec() bool {
 	return true
 }
 
+func (cmd *JobCommand) ExecPipeCmd(in *JobCommand) bool {
+	var err error
+
+	producer := exec.Command(in.Name, in.Args...)
+	consumer := exec.Command(cmd.Name, cmd.Args...)
+	if consumer.Stdin, err = producer.StdoutPipe(); err != nil {
+		info("Failed to combine the 2 commands with pipe\n")
+		return false
+	}
+
+	if err = consumer.Start(); err != nil {
+		info("err occurred when start executing command: (cmd=%s, agrs=%v): \\n%v\\n", cmd.Name, cmd.Args)
+		return false
+
+	}
+
+	if err = producer.Run(); err != nil {
+		info("err occurred when executing command: (cmd=%s, agrs=%v): \\n%v\\n", in.Name, in.Args)
+		return false
+
+	}
+
+	if err = consumer.Wait(); err != nil {
+		info("err occurred when waiting the command executing complete: (cmd=%s, agrs=%v): \\n%v\\n", cmd.Name, cmd.Args)
+		return false
+
+	}
+
+	return true
+
+}
+
 func (d *JobManager) execJobCmd(jobId string) {
 	var success bool
 	for {
@@ -270,6 +302,8 @@ func (d *JobManager) execJobCmd(jobId string) {
 				d.accessLock.RUnlock()
 				if OK {
 					info("begin to execute command")
+
+					//change the working dir
 					targetPath, err := filepath.Abs(WS_PATH + jobId)
 					if err != nil {
 						info("AbsError (%s): %s\\n", WS_PATH+jobId, err)
@@ -283,6 +317,26 @@ func (d *JobManager) execJobCmd(jobId string) {
 						break
 					}
 
+					//select correct jdk version
+					echoCmd := &JobCommand{
+						Name: "echo",
+						Args: []string{"1"},
+					}
+
+					if job.JdkVersion == "jdk1.7" {
+						echoCmd.Args = []string{"2"}
+					}
+
+					switchJdkCmd := &JobCommand{
+						Name: "alternatives",
+						Args: []string{"--config", "java"},
+					}
+					success = switchJdkCmd.ExecPipeCmd(echoCmd)
+					if !success {
+						break
+					}
+
+					//pull code from git
 					if codeManager := job.GetCodeManager(); codeManager != nil && codeManager.GitConfig != nil {
 						info("begin to pulling code\n")
 						gitInitCmd := &JobCommand{

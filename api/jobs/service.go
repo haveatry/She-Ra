@@ -49,13 +49,13 @@ func (d JobManager) WebService() *restful.WebService {
 		Param(ws.PathParameter("job-id", "identifier of the job").DataType("string")).
 		Writes([]Job{})) // on the response
 
-	ws.Route(ws.PUT("/jobs/create").To(d.createJob).
+	ws.Route(ws.POST("/jobs/create").To(d.createJob).
 		// docs
 		Doc("create a job").
 		Operation("createJob").
 		Reads(Job{})) // from the request
 
-	ws.Route(ws.POST("/jobs/update").To(d.updateJob).
+	ws.Route(ws.PUT("/jobs/update").To(d.updateJob).
 		// docs
 		Doc("update a job").
 		Operation("updateJob").
