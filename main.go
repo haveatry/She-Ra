@@ -7,8 +7,10 @@ import (
 	"path/filepath"
 	"github.com/emicklei/go-restful"
 	"github.com/emicklei/go-restful/swagger"
-	"github.com/haveatry/api/jobs"
-	"github.com/haveatry/She-Ra/configdata"
+	//"github.com/haveatry/api/jobs"
+	//"github.com/haveatry/She-Ra/configdata"
+	"github.com/jianzi123/api/jobs"
+	"github.com/jianzi123/She-Ra/configdata"
 	"github.com/magiconair/properties"
 )
 

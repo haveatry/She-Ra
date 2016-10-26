@@ -2,8 +2,10 @@ package jobs
 
 import (
 	"github.com/emicklei/go-restful"
-	. "github.com/haveatry/She-Ra/api/response"
-	. "github.com/haveatry/She-Ra/configdata"
+	//. "github.com/haveatry/She-Ra/api/response"
+	//. "github.com/haveatry/She-Ra/configdata"
+	. "github.com/jianzi123/She-Ra/api/response"
+	. "github.com/jianzi123/She-Ra/configdata"
 )
 
 func WebService(jobMng *JobManager) *restful.WebService {
