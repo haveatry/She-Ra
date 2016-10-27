@@ -2,10 +2,8 @@ package jobs
 
 import (
 	"github.com/emicklei/go-restful"
-	//. "github.com/haveatry/She-Ra/api/response"
-	//. "github.com/haveatry/She-Ra/configdata"
-	. "github.com/jianzi123/She-Ra/api/response"
-	. "github.com/jianzi123/She-Ra/configdata"
+//	. "She-Ra/api/response"
+	. "She-Ra/configdata"
 )
 
 func WebService(jobMng *JobManager) *restful.WebService {
@@ -44,7 +42,7 @@ func (d JobManager) WebService() *restful.WebService {
 		Doc("get a job config").
 		Operation("findJob").
 		Param(ws.PathParameter("job-id", "identifier of the job").DataType("string")).
-		Writes(Resource{})) // on the response
+		Writes(Job{})) // on the response
 
 	ws.Route(ws.PUT("").To(d.createJob).
 		// docs
@@ -58,6 +56,13 @@ func (d JobManager) WebService() *restful.WebService {
 		Operation("updateJob").
 		Param(ws.PathParameter("job-id", "identifier of the job").DataType("string")).
 		Reads(Job{})) // from the request
+		
+	ws.Route(ws.DELETE("/{job-id}").To(d.delJob).
+		// docs
+		Doc("delete a job").
+		Operation("delete job by job-id").
+		Param(ws.PathParameter("job-id", "identifier of the job").DataType("string")).
+		Writes(Job{})) // one the response
 
 	return ws
 }

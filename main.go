@@ -3,14 +3,14 @@ package main
 import (
 	"flag"
 	"log"
+	"sync"
 	"net/http"
 	"path/filepath"
+	"She-Ra/api/jobs"
+	//"She-Ra/configdata"
+	"She-Ra/util/lrumap"
 	"github.com/emicklei/go-restful"
 	"github.com/emicklei/go-restful/swagger"
-	//"github.com/haveatry/api/jobs"
-	//"github.com/haveatry/She-Ra/configdata"
-	"github.com/jianzi123/api/jobs"
-	"github.com/jianzi123/She-Ra/configdata"
 	"github.com/magiconair/properties"
 )
 
@@ -63,6 +63,7 @@ var (
 func main() {
 	flag.Parse()
 
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	// Load configurations from a file
 	info("loading configuration from [%s]", *propertiesFile)
 	var err error
@@ -75,8 +76,11 @@ func main() {
 	SheRaIcon = filepath.Join(SwaggerPath, "images/jion.ico")
 
 	// New Job Manager
+	memMap, _ := lrumap.NewLRU(1000, nil)
 	jobMng := &jobs.JobManager{
-		JobMap: make(map[string]*configdata.Job),
+		//JobMap: make(map[string]*configdata.Job),
+		JobMap: memMap,
+		AccessLock: new(sync.RWMutex),
 	}
 
 	// accept and respond in JSON unless told otherwise
