@@ -12,7 +12,7 @@ type Error struct {
 }
 
 func WriteError(err error, resp *restful.Response) {
-	log.Printf("[mora][error] %v", err)
+	log.Printf("[She-Ra][error] %v", err)
 
 	// Set response status code
 	code := http.StatusInternalServerError
@@ -35,4 +35,3 @@ func WriteStatusError(status int, err error, resp *restful.Response) {
 	success.SetError(err)
 	success.WriteStatus(status, resp)
 }
-
