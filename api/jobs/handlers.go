@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/emicklei/go-restful"
 	"She-Ra/util/lrumap"
-    	"strconv"
 	"runtime"
 	"path"
 	"errors"
@@ -79,9 +78,9 @@ func (d *JobManager) createJob(request *restful.Request, response *restful.Respo
 		return
 	}
 	
-	job.Id = strconv.Itoa(d.JobMap.Len() + 1)
+	//job.Id = strconv.Itoa(d.JobMap.Len() + 1)
 	// map key id:name after 2016/10
-	key := job.Name
+	key := job.Id
 	d.accessLock.Lock()
 	if isExistJob(key) == true {
 		d.accessLock.Unlock()
@@ -137,7 +136,7 @@ func writeDataToFile(job *configdata.Job) (fileName string, err error) {
 	if err = os.MkdirAll(logPath, 0777); err != nil {
 		return "", err
 	}
-	fileName = filePath + "/" + job.Name
+	fileName = filePath + "/" + job.Id
 	//log.Print("job fileName: ", fileName)
 	var file *os.File
 	if isFileExist(fileName) != true {
@@ -335,7 +334,7 @@ func (d *JobManager) execJob(request *restful.Request, response *restful.Respons
 	if OK {
 		info("Get job successfully")
 		jobExec := &configdata.Execution{}
-		jobExec.Number = job.CurrentNumber + 1
+		jobExec.Number = job.(configdata.Job).CurrentNumber + 1
 		now := time.Now()
 		year, mon, day := now.Date()
 		hour, min, sec := now.Clock()
@@ -345,9 +344,8 @@ func (d *JobManager) execJob(request *restful.Request, response *restful.Respons
 		response.WriteHeaderAndEntity(http.StatusCreated, jobExec)
 
 		d.accessLock.Lock()
-
-		mJob, ok := d.JobMap.Get(jobId)
-		mJob.CurrentNumber++
+	        	
+		job.(*configdata.Job).CurrentNumber++
 		//go d.execJobCmd(jobId)
 		info("Get the write lock successfully")
 		d.accessLock.Unlock()
@@ -447,6 +445,7 @@ func (d *JobManager) execJobCmd(jobId string) {
 				//time.Sleep(600 * time.Second)
 				d.accessLock.RLock()
 				job, OK := d.JobMap.Get(jobId)
+				var mJob *configdata.Job = job.(*configdata.Job)
 				d.accessLock.RUnlock()
 				if OK {
 					info("begin to execute command")
@@ -471,7 +470,7 @@ func (d *JobManager) execJobCmd(jobId string) {
 						Args: []string{"1"},
 					}
 
-					if job.JdkVersion == "jdk1.7" {
+					if mJob.JdkVersion == "jdk1.7" {
 						echoCmd.Args = []string{"2"}
 					}
 
@@ -485,7 +484,7 @@ func (d *JobManager) execJobCmd(jobId string) {
 					}
 
 					//pull code from git
-					if codeManager := job.GetCodeManager(); codeManager != nil && codeManager.GitConfig != nil {
+					if codeManager := job.(*configdata.Job).GetCodeManager(); codeManager != nil && codeManager.GitConfig != nil {
 						info("begin to pulling code\n")
 						gitInitCmd := &JobCommand{
 							Name: "git",
@@ -516,7 +515,7 @@ func (d *JobManager) execJobCmd(jobId string) {
 
 					}
 
-					if buildManager := job.GetBuildManager(); buildManager != nil {
+					if buildManager := mJob.GetBuildManager(); buildManager != nil {
 						if buildManager.AntConfig != nil {
 							antBuildCmd := &JobCommand{
 								Name: "ant",
@@ -541,8 +540,8 @@ func (d *JobManager) execJobCmd(jobId string) {
 						}
 					}
 
-					if job.BuildImgCmd != "" {
-						cmdWithArgs := strings.Split(job.BuildImgCmd, " ")
+					if mJob.BuildImgCmd != "" {
+						cmdWithArgs := strings.Split(mJob.BuildImgCmd, " ")
 						imgBuildCmd := &JobCommand{
 							Name: cmdWithArgs[0],
 							Args: cmdWithArgs[1:],
@@ -553,8 +552,8 @@ func (d *JobManager) execJobCmd(jobId string) {
 						}
 					}
 
-					if job.PushImgCmd != "" {
-						cmdWithArgs := strings.Split(job.PushImgCmd, " ")
+					if mJob.PushImgCmd != "" {
+						cmdWithArgs := strings.Split(mJob.PushImgCmd, " ")
 						imgPushCmd := &JobCommand{
 							Name: cmdWithArgs[0],
 							Args: cmdWithArgs[1:],
@@ -570,7 +569,7 @@ func (d *JobManager) execJobCmd(jobId string) {
 			if cmd == KILL_GOROUTINE {
 				info("The log file has been deleted, exit the goroutine\n")
 				d.accessLock.Lock()
-				delete(d.JobMap, jobId)
+				d.JobMap.Remove(jobId)
 				delete(d.JobExecMap, jobId)
 				d.accessLock.Unlock()
 				return
