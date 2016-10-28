@@ -2,9 +2,9 @@ package main
 
 import (
 	"flag"
+	"She-Ra/api/jobs"
 	"github.com/emicklei/go-restful"
 	"github.com/emicklei/go-restful/swagger"
-	"github.com/haveatry/She-Ra/api/jobs"
 	"github.com/magiconair/properties"
 	"log"
 	"net/http"
@@ -60,11 +60,13 @@ var (
 func main() {
 	flag.Parse()
 
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	// Load configurations from a file
 	info("loading configuration from [%s]", *propertiesFile)
 	var err error
 	if props, err = properties.LoadFile(*propertiesFile, properties.UTF8); err != nil {
 		log.Fatalf("[She-Ra][error] Unable to read properties:%v\n", err)
+		return
 	}
 
 	// Swagger configuration
@@ -72,8 +74,11 @@ func main() {
 	SheRaIcon = filepath.Join(SwaggerPath, "images/jion.ico")
 
 	// New Job Manager
-	jobMng := jobs.NewJobManager()
-
+	jobMng, err := jobs.NewJobManager(1000, 1000)
+	if err != nil {
+		log.Fatalf("[She-Ra][error] %v\n", err)
+		return
+	}
 	// accept and respond in JSON unless told otherwise
 	restful.DefaultRequestContentType(restful.MIME_JSON)
 	restful.DefaultResponseContentType(restful.MIME_JSON)

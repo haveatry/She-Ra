@@ -3,8 +3,12 @@ package jobs
 import (
 	"fmt"
 	"github.com/emicklei/go-restful"
+	"She-Ra/util/lrumap"
+	"runtime"
+	"path"
+	"errors"
 	"github.com/golang/protobuf/proto"
-	"github.com/haveatry/She-Ra/configdata"
+	"She-Ra/configdata"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -25,10 +29,15 @@ const (
 	EXEC_GOROUTINE = 1314
 )
 
+type JobCommand struct {
+	Name string
+	Args []string
+}
+
 type JobManager struct {
-	JobMap     map[string]*configdata.Job
-	JobExecMap map[string]chan int
-	accessLock *sync.RWMutex
+    JobMap *lrumap.LRU
+    accessLock *sync.RWMutex
+    JobExecMap map[string]chan int
 }
 
 /*
@@ -43,18 +52,20 @@ type GitClient struct {
 }
 */
 
-type JobCommand struct {
-	Name string
-	Args []string
-}
-
-func NewJobManager() *JobManager {
+func NewJobManager(jobNum int, jobChan int) (*JobManager, error) {
+	if jobNum <= 0 || jobChan <= 0 {
+		return nil, errors.New("job num or job channel num is zero.")
+	}
+	lru, err := lrumap.NewLRU(jobNum, nil)
+	if err != nil {
+		return nil, errors.New("init lru map failed")
+	}
 	jobManager := &JobManager{
-		JobMap:     make(map[string]*configdata.Job, 100),
-		JobExecMap: make(map[string]chan int, 100),
+		JobMap:     lru,
+		JobExecMap: make(map[string]chan int, jobChan),
 		accessLock: &sync.RWMutex{},
 	}
-	return jobManager
+	return jobManager, nil
 }
 
 func (d *JobManager) createJob(request *restful.Request, response *restful.Response) {
@@ -66,109 +77,244 @@ func (d *JobManager) createJob(request *restful.Request, response *restful.Respo
 		response.WriteErrorString(http.StatusInternalServerError, err.Error())
 		return
 	}
-
+	
+	//job.Id = strconv.Itoa(d.JobMap.Len() + 1)
+	// map key id:name after 2016/10
+	key := job.Id
+	d.accessLock.Lock()
+	if isExistJob(key) == true {
+		d.accessLock.Unlock()
+		response.WriteErrorString(http.StatusInternalServerError, "job key already exist, please retry." )
+		return	
+	}
 	job.MaxKeepDays = MAX_KEEP_DAYS
 	job.MaxExecutionRecords = MAX_EXEC_NUM
 	job.CurrentNumber = 0
-
-	d.accessLock.RLock()
-	_, OK := d.JobMap[job.Id]
-	d.accessLock.RUnlock()
-	if OK {
-		response.AddHeader("Content-Type", "text/plain")
-		response.WriteErrorString(http.StatusInternalServerError, err.Error())
-		return
-	} else {
-		go d.execJobCmd(job.Id)
-		d.accessLock.Lock()
-		d.JobExecMap[job.Id] = make(chan int, 1)
-		d.JobMap[job.Id] = job
+	
+	if _, err := writeDataToFile(job); err != nil {
 		d.accessLock.Unlock()
-	}
+		log.Print("write job into file failed. key : ", key, "; ", job)
+		response.WriteErrorString(http.StatusInternalServerError, "write job into file failed, please retry." )
+		return 
+	}else{
+		go d.execJobCmd(job.Id)
+		d.JobExecMap[job.Id] = make(chan int, 1)
+		if d.JobMap.Add(job.Id, job) == false {
+			d.accessLock.Unlock()
+			response.WriteErrorString(http.StatusInternalServerError, ", please retry." )
+			return
+		}
+		createWorkSpace := &JobCommand{
+			Name: "mkdir",
+			Args: []string{"-p", WS_PATH + job.Id + "/" + EXECUTION_PATH},
+		}
+	    createWorkSpace.Exec()
 
-	//encode job info and store job info into config file
-	out, err := proto.Marshal(job)
-	if err != nil {
-		log.Fatalln("Failed to encode job info:", err)
-		response.AddHeader("Content-Type", "text/plain")
-		response.WriteErrorString(http.StatusInternalServerError, err.Error())
-		return
+		// put some data to database
+		
+		log.Print("add new job succeed; key: ", key, "; jober: ", job)
 	}
-
-	createWorkSpace := &JobCommand{
-		Name: "mkdir",
-		Args: []string{"-p", WS_PATH + job.Id + "/" + EXECUTION_PATH},
-	}
-	createWorkSpace.Exec()
-
-	configFile := WS_PATH + job.Id + "/configfile"
-	if err := ioutil.WriteFile(configFile, out, 0644); err != nil {
-		log.Fatalln("Failed to write job info to file:", err)
-		response.AddHeader("Content-Type", "text/plain")
-		response.WriteErrorString(http.StatusInternalServerError, err.Error())
-		return
-	}
-
+	d.accessLock.Unlock()
 	response.WriteHeaderAndEntity(http.StatusCreated, job)
 }
 
-func (d *JobManager) findJob(request *restful.Request, response *restful.Response) {
-	jobId := request.PathParameter("job-id")
-	info("job.Id: %s\n", jobId)
+func writeDataToFile(job *configdata.Job) (fileName string, err error) {
 
-	d.accessLock.RLock()
-	info("Get the read lock successfully")
-	job, OK := d.JobMap[jobId]
-	d.accessLock.RUnlock()
-	if OK {
-		info("Get job successfully")
-		response.WriteHeaderAndEntity(http.StatusFound, job)
-	} else {
-		info("failed to find the job %s\n", jobId)
-		response.WriteHeader(http.StatusNotFound)
+	data, err := proto.Marshal(job)
+	//data, err := json.Marshal(job)
+	if err != nil {
+        log.Fatal("marshaling error: ", err)
+		return "", err	
 	}
+    log.Print("proto marshal: job", string(data))
+
+	filePath := WS_PATH + job.Id + "/configfile"
+	if err = os.MkdirAll(filePath, 0777); err != nil {
+		return  "", err
+	}
+	logPath  := filePath + "/log"
+	if err = os.MkdirAll(logPath, 0777); err != nil {
+		return "", err
+	}
+	fileName = filePath + "/" + job.Id
+	//log.Print("job fileName: ", fileName)
+	var file *os.File
+	if isFileExist(fileName) != true {
+		if file, err = os.Create(fileName); os.IsNotExist(err) {
+			log.Print("file create failed : ", err)
+			return "", err
+		}else{
+			log.Print("create file successfully.")
+		}
+		
+	}else{
+		if file, err = os.OpenFile(fileName, os.O_RDWR | os.O_TRUNC, 0666); os.IsNotExist(err) {
+			log.Print(err)
+			return fileName, err
+		}else{
+			log.Print("OpenFile ", fileName, " successfully.")
+		}
+	}
+	var nLen int
+	if nLen, err = file.Write(data); err != nil {
+		log.Print("write data ino file ", fileName, " failed : ", string(data), ";data len: ", nLen)
+		return fileName, err
+	}else{
+		log.Print("write data into file succeed. file: ", fileName, "; data: ", string(data))
+	}
+	if err = file.Close(); err != nil {
+		log.Print("file close failed: ", err)
+		return fileName, err
+	}else{
+		log.Print("file close succeed.")	
+	}
+	return fileName, err
+}
+
+func getLocalPath() string {
+	var filePath string
+	_, fullFileName, _, ok := runtime.Caller(0)
+	if ok != false {
+		filePath = path.Dir(fullFileName)
+	}
+	log.Print("get path :", filePath)
+	return filePath
+}
+
+func isFileExist(fileName string) bool {
+	var bExist bool
+	if _, err := os.Stat(fileName); os.IsNotExist(err){
+		log.Print("file is not exist, ", err)
+		bExist = false 
+	}else{
+		bExist = true
+		log.Print("file is exist.")
+	}
+	return bExist
 }
 
 func (d *JobManager) findAllJobs(request *restful.Request, response *restful.Response) {
 
 }
 
+func (d *JobManager) findJob(request *restful.Request, response *restful.Response) {
+	job_key := request.PathParameter("job-id")
+	
+	// first read data from database
+	if ok := isExistJob(job_key); ok != false {
+		errResponse(http.StatusNotFound, "job-id: " + job_key +  " not find in database.", response)
+		return 
+	}
+	d.accessLock.RLock()
+	if  ok := d.JobMap.Contains(job_key); ok != true {
+		// read data from file
+		fName := WS_PATH + job_key + "/" + "configure"
+		if job, err := readJobFromFile(fName); err != nil {
+			d.accessLock.RUnlock()
+			errResponse(http.StatusNotFound, "job-id: " + job_key +  " in database and file, not in memery; " + err.Error(), response)
+			return
+		}else{
+			if d.JobMap.Add(job_key, job) == false {
+				d.accessLock.RUnlock()
+				errResponse(http.StatusNotFound, "job-id: " + job_key +  "; get job from memery failed.", response)
+			}else{
+				d.accessLock.RUnlock()
+				response.WriteHeaderAndEntity(http.StatusFound, job)
+			}
+			return
+		}
+	}
+}
+
+func readJobFromFile(fName string) (*configdata.Job, error) {
+	if len(fName) == 0 {
+		log.Print("fileName is empty.")
+		return nil, errors.New("fileName is empty")
+	}
+	in, err := ioutil.ReadFile(fName)
+	if err != nil {
+        	log.Fatalln("Error reading file:", err)
+		return nil, err
+	}
+	jObj := &configdata.Job{}
+	if err := proto.Unmarshal(in, jObj); err != nil {
+        	log.Fatalln("Failed to parse job:", err)
+		return nil, err
+	}
+	return jObj, nil
+	
+} 
+
 func (d *JobManager) updateJob(request *restful.Request, response *restful.Response) {
+	job_key := request.PathParameter("job-id")
+	
 	job := new(configdata.Job)
 	err := request.ReadEntity(job)
-	info("job.Id: %s\n", job.Id)
 	if err != nil {
-		response.AddHeader("Content-Type", "text/plain")
-		response.WriteErrorString(http.StatusInternalServerError, err.Error())
+		errResponse(http.StatusInternalServerError, err.Error(), response)
 		return
 	}
-
-	job.MaxKeepDays = MAX_KEEP_DAYS
-	job.MaxExecutionRecords = MAX_EXEC_NUM
-	job.CurrentNumber = 0
-	d.accessLock.Lock()
-	d.JobMap[job.Id] = job
-	d.accessLock.Unlock()
-
-	response.WriteHeaderAndEntity(http.StatusCreated, job)
+	
+	if ok := isExistJob(job_key); ok != true {
+		errResponse(410, "job is not exist.", response)
+	}else{
+		if fileName, err := writeDataToFile(job); err != nil {
+			errResponse(412, err.Error() + "; fileName:" + fileName, response)
+		}else{
+			job.MaxKeepDays = MAX_KEEP_DAYS
+			job.MaxExecutionRecords = MAX_EXEC_NUM
+			job.CurrentNumber = 0
+			d.accessLock.Lock()
+			if d.JobMap.Add(job_key, job) == false {
+				log.Print("add to mem cache failed: job_key: ", job_key)
+			}
+			d.accessLock.Unlock()	
+			log.Print("add new job succeed; key: ", job_key, "; jober: ", job)
+			response.WriteHeaderAndEntity(http.StatusOK, job)
+		}
+	}
 }
 
 func (d *JobManager) delJob(request *restful.Request, response *restful.Response) {
 	jobId := request.PathParameter("job-id")
-	info("jober.Id: %s", jobId)
-	d.setChan(jobId, KILL_GOROUTINE)
-	cleanupCmd := &JobCommand{
-		Name: "rm",
-		Args: []string{"-rf", WS_PATH + jobId},
-	}
-	success := cleanupCmd.Exec()
-	if !success {
-		response.WriteHeader(http.StatusInternalServerError)
-		return
-	}
+	if ok := isExistJob(jobId); ok != true {
+		errResponse(410, "job is not exist.", response)
+	}else{
+		d.setChan(jobId, KILL_GOROUTINE)
+             	cleanupCmd := &JobCommand{
+                     Name: "rm",
+                     Args: []string{"-rf", WS_PATH + jobId},
+             	}
+             	success := cleanupCmd.Exec()
+             	if !success {
+                     response.WriteHeader(http.StatusInternalServerError)
+                     return
+             	}
+     
+             	d.setChan(jobId, KILL_GOROUTINE)
 
-	d.setChan(jobId, KILL_GOROUTINE)
-	response.WriteHeader(http.StatusAccepted)
+		d.accessLock.Lock()
+		if ok = d.JobMap.Contains(jobId); ok == true {
+			d.JobMap.Remove(jobId)
+		}
+		d.accessLock.Unlock()
+		if err := os.RemoveAll(WS_PATH + jobId); err != nil {
+			log.Print("when remove job , something occur: ", err)
+		}
+		// del from database
+		
+		response.WriteHeaderAndEntity(http.StatusOK, "remove job succeed.")
+	}
+}
+
+func errResponse(status int, errInfo string,  response *restful.Response) {
+	response.AddHeader("Content-Type", "text/plain")
+	response.WriteErrorString(status, errInfo)
+}
+
+func isExistJob(job_id string) bool {
+	// first read data from database
+	return false
 }
 
 func (d *JobManager) setChan(jobId string, value int) {
@@ -183,12 +329,12 @@ func (d *JobManager) execJob(request *restful.Request, response *restful.Respons
 
 	d.accessLock.RLock()
 	info("Get the read lock successfully")
-	job, OK := d.JobMap[jobId]
+	job, OK := d.JobMap.Get(jobId)
 	d.accessLock.RUnlock()
 	if OK {
 		info("Get job successfully")
 		jobExec := &configdata.Execution{}
-		jobExec.Number = job.CurrentNumber + 1
+		jobExec.Number = job.(configdata.Job).CurrentNumber + 1
 		now := time.Now()
 		year, mon, day := now.Date()
 		hour, min, sec := now.Clock()
@@ -198,8 +344,8 @@ func (d *JobManager) execJob(request *restful.Request, response *restful.Respons
 		response.WriteHeaderAndEntity(http.StatusCreated, jobExec)
 
 		d.accessLock.Lock()
-
-		d.JobMap[jobId].CurrentNumber++
+	        	
+		job.(*configdata.Job).CurrentNumber++
 		//go d.execJobCmd(jobId)
 		info("Get the write lock successfully")
 		d.accessLock.Unlock()
@@ -298,7 +444,8 @@ func (d *JobManager) execJobCmd(jobId string) {
 			if cmd == EXEC_GOROUTINE {
 				//time.Sleep(600 * time.Second)
 				d.accessLock.RLock()
-				job, OK := d.JobMap[jobId]
+				job, OK := d.JobMap.Get(jobId)
+				var mJob *configdata.Job = job.(*configdata.Job)
 				d.accessLock.RUnlock()
 				if OK {
 					info("begin to execute command")
@@ -323,7 +470,7 @@ func (d *JobManager) execJobCmd(jobId string) {
 						Args: []string{"1"},
 					}
 
-					if job.JdkVersion == "jdk1.7" {
+					if mJob.JdkVersion == "jdk1.7" {
 						echoCmd.Args = []string{"2"}
 					}
 
@@ -337,7 +484,7 @@ func (d *JobManager) execJobCmd(jobId string) {
 					}
 
 					//pull code from git
-					if codeManager := job.GetCodeManager(); codeManager != nil && codeManager.GitConfig != nil {
+					if codeManager := job.(*configdata.Job).GetCodeManager(); codeManager != nil && codeManager.GitConfig != nil {
 						info("begin to pulling code\n")
 						gitInitCmd := &JobCommand{
 							Name: "git",
@@ -368,7 +515,7 @@ func (d *JobManager) execJobCmd(jobId string) {
 
 					}
 
-					if buildManager := job.GetBuildManager(); buildManager != nil {
+					if buildManager := mJob.GetBuildManager(); buildManager != nil {
 						if buildManager.AntConfig != nil {
 							antBuildCmd := &JobCommand{
 								Name: "ant",
@@ -393,8 +540,8 @@ func (d *JobManager) execJobCmd(jobId string) {
 						}
 					}
 
-					if job.BuildImgCmd != "" {
-						cmdWithArgs := strings.Split(job.BuildImgCmd, " ")
+					if mJob.BuildImgCmd != "" {
+						cmdWithArgs := strings.Split(mJob.BuildImgCmd, " ")
 						imgBuildCmd := &JobCommand{
 							Name: cmdWithArgs[0],
 							Args: cmdWithArgs[1:],
@@ -405,8 +552,8 @@ func (d *JobManager) execJobCmd(jobId string) {
 						}
 					}
 
-					if job.PushImgCmd != "" {
-						cmdWithArgs := strings.Split(job.PushImgCmd, " ")
+					if mJob.PushImgCmd != "" {
+						cmdWithArgs := strings.Split(mJob.PushImgCmd, " ")
 						imgPushCmd := &JobCommand{
 							Name: cmdWithArgs[0],
 							Args: cmdWithArgs[1:],
@@ -422,7 +569,7 @@ func (d *JobManager) execJobCmd(jobId string) {
 			if cmd == KILL_GOROUTINE {
 				info("The log file has been deleted, exit the goroutine\n")
 				d.accessLock.Lock()
-				delete(d.JobMap, jobId)
+				d.JobMap.Remove(jobId)
 				delete(d.JobExecMap, jobId)
 				d.accessLock.Unlock()
 				return

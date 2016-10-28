@@ -2,8 +2,8 @@ package jobs
 
 import (
 	"github.com/emicklei/go-restful"
-	//. "github.com/haveatry/She-Ra/api/response"
-	. "github.com/haveatry/She-Ra/configdata"
+	//. "She-Ra/api/response"
+	. "She-Ra/configdata"
 )
 
 func WebService(jobMng *JobManager) *restful.WebService {
@@ -61,7 +61,7 @@ func (d JobManager) WebService() *restful.WebService {
 		Operation("updateJob").
 		Param(ws.PathParameter("job-id", "identifier of the job").DataType("string")).
 		Reads(Job{})) // from the request
-
+		
 	ws.Route(ws.POST("/jobs/{job-id}").To(d.execJob).
 		// docs
 		Doc("execute a job").
