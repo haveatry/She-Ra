@@ -63,6 +63,7 @@ func main() {
 	// Load configurations from a file
 	info("loading configuration from [%s]", *propertiesFile)
 	var err error
+	var jobMng *jobs.JobManager
 	if props, err = properties.LoadFile(*propertiesFile, properties.UTF8); err != nil {
 		log.Fatalf("[She-Ra][error] Unable to read properties:%v\n", err)
 	}
@@ -72,7 +73,9 @@ func main() {
 	SheRaIcon = filepath.Join(SwaggerPath, "images/jion.ico")
 
 	// New Job Manager
-	jobMng := jobs.NewJobManager()
+	if jobMng, err = jobs.NewJobManager(); err != nil {
+		log.Fatalf("[She-Ra][error] failed to create JobManager:%v\n", err)
+	}
 
 	// accept and respond in JSON unless told otherwise
 	restful.DefaultRequestContentType(restful.MIME_JSON)

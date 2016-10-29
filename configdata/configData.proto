@@ -10,8 +10,9 @@ message Job {
 	int32 	currentNumber = 6;
 	int32 	maxExecutionRecords = 7;
 	int32 	maxKeepDays = 8;
-	CodeManager codeManager = 9;
-	BuildManager buildManager = 10;
+        int32   jobRemoved = 9;
+	CodeManager codeManager = 10;
+	BuildManager buildManager = 11;
 }
 
 message CodeManager {
