@@ -7,12 +7,12 @@ message Job {
 	string 	jdkVersion = 3;
 	string 	buildImgCmd = 4;
 	string 	pushImgCmd = 5;
-	int32 	currentNumber = 6;
-	int32 	maxExecutionRecords = 7;
-	int32 	maxKeepDays = 8;
-        int32   jobRemoved = 9;
-	CodeManager codeManager = 10;
-	BuildManager buildManager = 11;
+	int32 	currentNumber = 7;
+	int32 	maxExecutionRecords = 8;
+	int32 	maxKeepDays = 9;
+        int32   jobRemoved = 10;
+	CodeManager codeManager = 11;
+	BuildManager buildManager = 12;
 }
 
 message CodeManager {

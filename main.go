@@ -5,50 +5,13 @@ import (
 	"github.com/emicklei/go-restful"
 	"github.com/emicklei/go-restful/swagger"
 	"github.com/haveatry/She-Ra/api/jobs"
+	"github.com/haveatry/She-Ra/utils"
 	"github.com/magiconair/properties"
 	"log"
 	"net/http"
 	"path/filepath"
 )
 
-/*
-type CodeManager struct {
-	configId	uint
-	gitAddr		string
-	gitBranch	string
-	refreshPolicy	bool
-}
-
-type CodeCompiling struct {
-	configId	uint
-	compileCmd	string
-	compiler	string
-	envVariables	string
-	rebuildPolicy	bool
-}
-
-type ImageBuilding struct {
-	configId	uint
-	dockerFile	string
-	registryAddr	string
-	rebuildPolicy	uint
-}
-
-type TaskConfig struct {
-	taskId			uint
-	funcModules		[]uint
-	executeTime		string
-	dependency		[]uint
-	maxExecutionRecords	uint
-	maxKeepDays		uint
-}
-
-type TaskExec struct {
-	executionId	uint
-	result		uint
-	execLog		string
-}
-*/
 var (
 	props          *properties.Properties
 	propertiesFile = flag.String("config", "she-ra.properties", "the configuration file")
@@ -71,6 +34,9 @@ func main() {
 	// Swagger configuration
 	SwaggerPath = props.GetString("swagger.path", "")
 	SheRaIcon = filepath.Join(SwaggerPath, "images/jion.ico")
+
+	// init database
+	utils.Init()
 
 	// New Job Manager
 	if jobMng, err = jobs.NewJobManager(); err != nil {
@@ -112,6 +78,7 @@ func main() {
 
 	// Serve favicon.ico
 	http.HandleFunc("/favion.ico", icon)
+	//http.Handle("/log", websocket.Handler(WatchLog))
 
 	info("ready to serve on %s", basePath)
 	log.Fatal(http.ListenAndServe(addr, nil))

@@ -35,10 +35,11 @@ func (d JobManager) WebService() *restful.WebService {
 	ws.Consumes(restful.MIME_XML, restful.MIME_JSON).
 		Produces(restful.MIME_JSON, restful.MIME_XML)
 
-	ws.Route(ws.GET("/jobs/{job-id}").To(d.findJob).
+	ws.Route(ws.GET("/jobs/{namespace}/{job-id}").To(d.findJob).
 		// docs
 		Doc("get a job config").
 		Operation("findJob").
+		Param(ws.PathParameter("namespace", "identifier of the namespace").DataType("string")).
 		Param(ws.PathParameter("job-id", "identifier of the job").DataType("string")).
 		Writes(Job{})) // on the response
 
@@ -49,58 +50,63 @@ func (d JobManager) WebService() *restful.WebService {
 		Param(ws.PathParameter("job-id", "identifier of the job").DataType("string")).
 		Writes([]Job{})) // on the response
 
-	ws.Route(ws.POST("/jobs/create").To(d.createJob).
+	ws.Route(ws.POST("/jobs/{namespace}/create").To(d.createJob).
 		// docs
 		Doc("create a job").
 		Operation("createJob").
+		Param(ws.PathParameter("namespace", "identifier of the namespace").DataType("string")).
 		Reads(Job{})) // from the request
 
 	ws.Route(ws.PUT("/jobs/update").To(d.updateJob).
 		// docs
 		Doc("update a job").
 		Operation("updateJob").
-		Param(ws.PathParameter("job-id", "identifier of the job").DataType("string")).
+		Param(ws.PathParameter("namespace", "identifier of the namespace").DataType("string")).
 		Reads(Job{})) // from the request
 
-	ws.Route(ws.POST("/jobs/{job-id}").To(d.execJob).
+	ws.Route(ws.POST("/jobs/{namespace}/{job-id}").To(d.execJob).
 		// docs
 		Doc("execute a job").
 		Operation("execJob").
+		Param(ws.PathParameter("namespace", "identifier of the namespace").DataType("string")).
 		Param(ws.PathParameter("job-id", "identifier of the job").DataType("string")))
 
-	ws.Route(ws.DELETE("/jobs/{job-id}").To(d.delJob).
+	ws.Route(ws.DELETE("/jobs/{namespace}/{job-id}").To(d.delJob).
 		// docs
 		Doc("delete a job").
 		Operation("delJob").
+		Param(ws.PathParameter("namespace", "identifier of the namespace").DataType("string")).
 		Param(ws.PathParameter("job-id", "identifier of the job").DataType("string")))
 
-	ws.Route(ws.GET("/jobs/{job-id}/executions").To(d.getAllJobExecutions).
+	ws.Route(ws.GET("/jobs/{namespace}/{job-id}/executions").To(d.getAllJobExecutions).
 		// docs
 		Doc("get all job execution records").
 		Operation("getAllJobExecutions").
-		Param(ws.PathParameter("job-id", "identifier of the job").DataType("string")).
-		Reads([]Execution{}))
+		Param(ws.PathParameter("namespace", "identifier of the namespace").DataType("string")).
+		Param(ws.PathParameter("job-id", "identifier of the job").DataType("string")))
 
-	ws.Route(ws.GET("/jobs/{job-id}/{execution_id}/get").To(d.openJobExecution).
+	ws.Route(ws.GET("/jobs/{namespace}/{job-id}/{execution_id}/get").To(d.openJobExecution).
 		// docs
 		Doc("read a job execution record").
 		Operation("openJobExecution").
+		Param(ws.PathParameter("namespace", "identifier of the namespace").DataType("string")).
 		Param(ws.PathParameter("job-id", "identifier of the job").DataType("string")).
 		Param(ws.PathParameter("execution_id", "identifier of one job execution").DataType("int")).
 		Reads(Execution{}))
 
-	ws.Route(ws.PUT("/jobs/{job-id}/{execution_id}/kill").To(d.killJobExecution).
+	ws.Route(ws.PUT("/jobs/{namespace}/{job-id}/{execution_id}/kill").To(d.killJobExecution).
 		// docs
 		Doc("force stop a job execution").
 		Operation("killJobExecution").
+		Param(ws.PathParameter("namespace", "identifier of the namespace").DataType("string")).
 		Param(ws.PathParameter("job-id", "identifier of the job").DataType("string")).
-		Param(ws.PathParameter("execution_id", "identifier of one job execution").DataType("int")).
-		Reads(Execution{}))
+		Param(ws.PathParameter("execution_id", "identifier of one job execution").DataType("int")))
 
-	ws.Route(ws.DELETE("/jobs/{job-id}/{execution_id}/delete").To(d.delJobExecution).
+	ws.Route(ws.DELETE("/jobs/{namespace}/{job-id}/{execution_id}/delete").To(d.delJobExecution).
 		// docs
 		Doc("delete a job execution record").
 		Operation("delJobExecution").
+		Param(ws.PathParameter("namespace", "identifier of the namespace").DataType("string")).
 		Param(ws.PathParameter("job-id", "identifier of the job").DataType("string")).
 		Param(ws.PathParameter("execution_id", "identifier of one job execution").DataType("int")))
 
