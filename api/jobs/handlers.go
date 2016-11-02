@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -542,6 +543,7 @@ func (cmd *JobCommand) ExecAsync(d *JobManager, key Key, startTime time.Time, nu
 
 	var recvCode int
 	jobCmd := exec.Command(cmd.Name, cmd.Args...)
+	jobCmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	err := jobCmd.Start()
 	if err != nil {
 		info("err occurred when start executing command: (cmd=%s, agrs=%v): \\n%v\\n", cmd.Name, cmd.Args)
@@ -561,9 +563,9 @@ func (cmd *JobCommand) ExecAsync(d *JobManager, key Key, startTime time.Time, nu
 			info("received kill execution command %d, seqno:%d\n", recvCode, number)
 			if recvCode == number || recvCode == EXEC_KILL_ALL {
 				info("begin to kill the execution command\n")
-				if err = jobCmd.Process.Kill(); err != nil {
-					log.Fatal("failed to kill: ", err)
-					return EXEC_ERROR
+				pgid, err := syscall.Getpgid(jobCmd.Process.Pid)
+				if err == nil {
+					syscall.Kill(-pgid, syscall.SIGTERM)
 				}
 				info("kill the execution command successfully\n")
 				duration := time.Now().Sub(startTime).Seconds()
